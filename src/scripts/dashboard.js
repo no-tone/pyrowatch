@@ -4,8 +4,8 @@ import L from 'leaflet';
 const INE_FIRE_URL = 'https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0008386&lang=PT';
 const INE_BURNED_URL = 'https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0013537&lang=PT';
 const BASE = import.meta.env.BASE_URL;
-const LOCAL_FIRE_URL = `${BASE}data/incendios-rurais-ine.json`;
-const LOCAL_BURNED_URL = `${BASE}data/superficie-ardida-ine.json`;
+const LOCAL_FIRE_URL = `${BASE}/data/incendios-rurais-ine.json`;
+const LOCAL_BURNED_URL = `${BASE}/data/superficie-ardida-ine.json`;
 const CACHE_KEY = 'pyrowatch-state';
 
 const nutsRegions = [
