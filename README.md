@@ -3,7 +3,6 @@
 [![Astro](https://img.shields.io/badge/Astro-6.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![D3.js](https://img.shields.io/badge/D3.js-7.x-F9A03C?logo=d3.js&logoColor=white)](https://d3js.org)
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.x-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Preview](#preview) · [Workflow](#workflow) · [Data Sources](#data-sources) · [Project Structure](#project-structure) · [Installation](#installation) · [Development](#development)
 
