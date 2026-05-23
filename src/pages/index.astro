@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Sidebar from '../components/Sidebar.astro';
+import MapPanel from '../components/MapPanel.astro';
+import ChartGrid from '../components/ChartGrid.astro';
+import 'leaflet/dist/leaflet.css';
+import '../styles/dashboard.css';
+---
+
+<Layout title="PyroWatch">
+  <main class="app-shell">
+    <Sidebar />
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p>Dashboard geográfico</p>
+          <h1>Perigo de incêndio em Portugal</h1>
+        </div>
+        <span id="status">A carregar INE/dados.gov.pt</span>
+      </header>
+
+      <MapPanel />
+      <ChartGrid />
+    </section>
+  </main>
+
+  <script src="../scripts/dashboard.js"></script>
+</Layout>
