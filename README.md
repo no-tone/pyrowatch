@@ -179,19 +179,3 @@ http://127.0.0.1:4321/pyrowatch
 npm run build
 npm run preview
 ```
-
-## GitHub Pages
-
-The Astro base path is configured in `astro.config.mjs`:
-
-```js
-export default defineConfig({
-  base: '/pyrowatch/'
-});
-```
-
-This matches a repository deployment at:
-
-```text
-https://<username>.github.io/pyrowatch/
-```
