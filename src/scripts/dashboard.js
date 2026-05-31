@@ -7,6 +7,8 @@ const BASE = import.meta.env.BASE_URL;
 const LOCAL_FIRE_URL = `${BASE}/data/incendios-rurais-ine.json`;
 const LOCAL_BURNED_URL = `${BASE}/data/superficie-ardida-ine.json`;
 const CACHE_KEY = 'pyrowatch-state';
+const DEFAULT_METRIC = 'fires';
+const DEFAULT_LAYOUT = ['bar', 'donut', 'scatter', 'municipalities', 'landuse', 'cards'];
 
 const nutsRegions = [
   { code: '111', name: 'Alto Minho', lat: 41.78, lng: -8.54, group: 'Norte' },
@@ -40,17 +42,25 @@ const chartTitles = {
   scatter: 'Ocorrências vs ardida',
   municipalities: 'Top municípios',
   landuse: 'Tipo de área ardida',
+  line: 'Evolução anual',
+  area: 'Tendência acumulada',
+  treemap: 'Peso regional',
+  heatmap: 'Matriz região/indicador',
+  lollipop: 'Ranking área ardida',
   cards: 'Resumo nacional'
 };
 
-let selectedMetric = 'fires';
+let selectedMetric = DEFAULT_METRIC;
 let selectedRegion = null;
 let regions = [];
 let municipalities = [];
 let burnedTypes = [];
+let yearlyTotals = [];
 let sourceText = '';
 let map = null;
 let markers = [];
+let activeDropTarget = null;
+let resizeFrame = 0;
 
 const statusEl = document.querySelector('#status');
 const metricSelect = document.querySelector('#metric');
@@ -135,6 +145,18 @@ function buildRegionalData(fireIndicator, burnedIndicator) {
     (values) => d3.sum(values, numberValue),
     (row) => row.dim_3_t
   ).map(([name, value]) => ({ name, value }));
+
+  yearlyTotals = Object.entries((Array.isArray(fireIndicator) ? fireIndicator[0] : fireIndicator).Dados)
+    .map(([year, rows]) => {
+      const portugal = rows.find((row) => row.geocod === 'PT');
+      const continent = rows.find((row) => row.geocod === '1');
+      return {
+        year: Number(year),
+        fires: numberValue(portugal || continent || { valor: 0 })
+      };
+    })
+    .filter((item) => Number.isFinite(item.year))
+    .sort((a, b) => a.year - b.year);
 }
 
 async function loadData() {
@@ -222,9 +244,9 @@ const chartTooltip = d3.select('body').append('div')
   .attr('class', 'd3-tooltip')
   .style('display', 'none');
 
-function showTip(event, html) {
+function showTip(event, text) {
   chartTooltip
-    .html(html)
+    .text(text)
     .style('display', 'block')
     .style('left', (event.pageX + 12) + 'px')
     .style('top', (event.pageY - 28) + 'px');
@@ -238,6 +260,18 @@ function moveTip(event) {
 
 function hideTip() {
   chartTooltip.style('display', 'none');
+}
+
+function setDropTarget(slot) {
+  if (activeDropTarget === slot) return;
+  activeDropTarget?.classList.remove('drop-target');
+  activeDropTarget = slot;
+  activeDropTarget?.classList.add('drop-target');
+}
+
+function clearDropTarget() {
+  activeDropTarget?.classList.remove('drop-target');
+  activeDropTarget = null;
 }
 
 function appendAxes(svg, xAxis, yAxis, height, margin) {
@@ -367,6 +401,147 @@ function drawLanduse(container) {
     .on('mouseout', hideTip);
 }
 
+function drawLine(container) {
+  const body = cardFrame(container, chartTitles.line);
+  const { width, height } = chartSize(body);
+  const margin = { top: 18, right: 20, bottom: 36, left: 58 };
+  const data = yearlyTotals.length > 1 ? yearlyTotals : yearlyTotals.map((d) => ({ ...d, year: d.year - 1 })).concat(yearlyTotals);
+  const svg = d3.select(body).append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+  const x = d3.scaleLinear().domain(d3.extent(data, (d) => d.year)).range([margin.left, width - margin.right]);
+  const y = d3.scaleLinear().domain([0, d3.max(data, (d) => d.fires)]).nice().range([height - margin.bottom, margin.top]);
+
+  appendAxes(svg, d3.axisBottom(x).tickFormat(d3.format('d')).ticks(Math.min(6, data.length)), d3.axisLeft(y).ticks(5), height, margin);
+  svg.append('path')
+    .datum(data)
+    .attr('fill', 'none')
+    .attr('stroke', '#38bdf8')
+    .attr('stroke-width', 3)
+    .attr('d', d3.line().x((d) => x(d.year)).y((d) => y(d.fires)).curve(d3.curveMonotoneX));
+  svg.selectAll('circle').data(data).join('circle')
+    .attr('cx', (d) => x(d.year))
+    .attr('cy', (d) => y(d.fires))
+    .attr('r', 5)
+    .attr('fill', '#f8fafc')
+    .on('mouseover', (event, d) => showTip(event, `${d.year}: ${d.fires.toLocaleString('pt-PT')} incêndios`))
+    .on('mousemove', moveTip)
+    .on('mouseout', hideTip);
+}
+
+function drawArea(container) {
+  const body = cardFrame(container, chartTitles.area);
+  const { width, height } = chartSize(body);
+  const margin = { top: 18, right: 20, bottom: 36, left: 58 };
+  let running = 0;
+  const data = yearlyTotals.map((d) => {
+    running += d.fires;
+    return { year: d.year, fires: running };
+  });
+  const plotted = data.length > 1 ? data : data.map((d) => ({ ...d, year: d.year - 1 })).concat(data);
+  const svg = d3.select(body).append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+  const x = d3.scaleLinear().domain(d3.extent(plotted, (d) => d.year)).range([margin.left, width - margin.right]);
+  const y = d3.scaleLinear().domain([0, d3.max(plotted, (d) => d.fires)]).nice().range([height - margin.bottom, margin.top]);
+
+  appendAxes(svg, d3.axisBottom(x).tickFormat(d3.format('d')).ticks(Math.min(6, plotted.length)), d3.axisLeft(y).ticks(5), height, margin);
+  svg.append('path')
+    .datum(plotted)
+    .attr('fill', '#0ea5e955')
+    .attr('d', d3.area().x((d) => x(d.year)).y0(height - margin.bottom).y1((d) => y(d.fires)).curve(d3.curveMonotoneX));
+  svg.append('path')
+    .datum(plotted)
+    .attr('fill', 'none')
+    .attr('stroke', '#0ea5e9')
+    .attr('stroke-width', 3)
+    .attr('d', d3.line().x((d) => x(d.year)).y((d) => y(d.fires)).curve(d3.curveMonotoneX));
+}
+
+function drawTreemap(container) {
+  const body = cardFrame(container, chartTitles.treemap);
+  const { width, height } = chartSize(body);
+  const data = { name: 'Portugal', children: regions.map((region) => ({ name: region.name, value: region.fires, group: region.group })) };
+  const root = d3.hierarchy(data).sum((d) => d.value).sort((a, b) => b.value - a.value);
+  d3.treemap().size([width, height]).padding(3)(root);
+  const color = d3.scaleOrdinal(d3.schemeTableau10);
+  const svg = d3.select(body).append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+
+  const cells = svg.selectAll('g').data(root.leaves()).join('g')
+    .attr('transform', (d) => `translate(${d.x0},${d.y0})`);
+  cells.append('rect')
+    .attr('width', (d) => Math.max(0, d.x1 - d.x0))
+    .attr('height', (d) => Math.max(0, d.y1 - d.y0))
+    .attr('rx', 5)
+    .attr('fill', (d) => color(d.data.group))
+    .attr('opacity', .86)
+    .on('mouseover', (event, d) => showTip(event, `${d.data.name}: ${d.value.toLocaleString('pt-PT')} incêndios`))
+    .on('mousemove', moveTip)
+    .on('mouseout', hideTip);
+  cells.append('text')
+    .attr('x', 7)
+    .attr('y', 18)
+    .attr('fill', '#f8fafc')
+    .attr('font-size', 12)
+    .text((d) => d.x1 - d.x0 > 76 && d.y1 - d.y0 > 28 ? d.data.name : '');
+}
+
+function drawHeatmap(container) {
+  const body = cardFrame(container, chartTitles.heatmap);
+  const { width, height } = chartSize(body);
+  const groups = [...new Set(regions.map((d) => d.group))];
+  const metrics = ['Incêndios', 'Superfície ardida'];
+  const data = groups.flatMap((group) => {
+    const rows = regions.filter((region) => region.group === group);
+    return [
+      { group, metric: metrics[0], value: d3.sum(rows, (d) => d.fires) },
+      { group, metric: metrics[1], value: d3.mean(rows, (d) => d.burnedShare) || 0 }
+    ];
+  });
+  const margin = { top: 18, right: 18, bottom: 44, left: 126 };
+  const svg = d3.select(body).append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+  const x = d3.scaleBand().domain(metrics).range([margin.left, width - margin.right]).padding(0.08);
+  const y = d3.scaleBand().domain(groups).range([margin.top, height - margin.bottom]).padding(0.08);
+  const color = d3.scaleSequential([0, d3.max(data, (d) => d.value)], d3.interpolateYlOrRd);
+
+  svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x));
+  svg.append('g').attr('class', 'axis').attr('transform', `translate(${margin.left},0)`).call(d3.axisLeft(y).tickSize(0));
+  svg.selectAll('rect').data(data).join('rect')
+    .attr('x', (d) => x(d.metric))
+    .attr('y', (d) => y(d.group))
+    .attr('width', x.bandwidth())
+    .attr('height', y.bandwidth())
+    .attr('rx', 5)
+    .attr('fill', (d) => color(d.value))
+    .on('mouseover', (event, d) => showTip(event, `${d.group} · ${d.metric}: ${d.value.toLocaleString('pt-PT', { maximumFractionDigits: 2 })}`))
+    .on('mousemove', moveTip)
+    .on('mouseout', hideTip);
+}
+
+function drawLollipop(container) {
+  const body = cardFrame(container, chartTitles.lollipop);
+  const { width, height } = chartSize(body);
+  const margin = { top: 14, right: 26, bottom: 34, left: 150 };
+  const data = [...regions].sort((a, b) => b.burnedShare - a.burnedShare).slice(0, 8);
+  const svg = d3.select(body).append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+  const x = d3.scaleLinear().domain([0, d3.max(data, (d) => d.burnedShare)]).nice().range([margin.left, width - margin.right]);
+  const y = d3.scaleBand().domain(data.map((d) => d.name)).range([margin.top, height - margin.bottom]).padding(0.28);
+
+  appendAxes(svg, d3.axisBottom(x).ticks(5), d3.axisLeft(y).tickSize(0), height, margin);
+  svg.selectAll('line.lollipop').data(data).join('line')
+    .attr('class', 'lollipop')
+    .attr('x1', margin.left)
+    .attr('x2', (d) => x(d.burnedShare))
+    .attr('y1', (d) => y(d.name) + y.bandwidth() / 2)
+    .attr('y2', (d) => y(d.name) + y.bandwidth() / 2)
+    .attr('stroke', '#64748b')
+    .attr('stroke-width', 2);
+  svg.selectAll('circle').data(data).join('circle')
+    .attr('cx', (d) => x(d.burnedShare))
+    .attr('cy', (d) => y(d.name) + y.bandwidth() / 2)
+    .attr('r', 7)
+    .attr('fill', '#f43f5e')
+    .on('mouseover', (event, d) => showTip(event, `${d.name}: ${d.burnedShare.toLocaleString('pt-PT', { maximumFractionDigits: 2 })}% ardida`))
+    .on('mousemove', moveTip)
+    .on('mouseout', hideTip);
+}
+
 function drawCards(container) {
   const body = cardFrame(container, chartTitles.cards);
   const data = currentData();
@@ -391,6 +566,11 @@ const renderers = {
   scatter: drawScatter,
   municipalities: drawMunicipalities,
   landuse: drawLanduse,
+  line: drawLine,
+  area: drawArea,
+  treemap: drawTreemap,
+  heatmap: drawHeatmap,
+  lollipop: drawLollipop,
   cards: drawCards
 };
 
@@ -445,28 +625,93 @@ function saveState() {
   localStorage.setItem(CACHE_KEY, JSON.stringify({ layout, selectedMetric }));
 }
 
+function applyDefaultState() {
+  selectedMetric = DEFAULT_METRIC;
+  selectedRegion = null;
+  clearDropTarget();
+  hideTip();
+  if (metricSelect) metricSelect.value = DEFAULT_METRIC;
+  document.querySelectorAll('.drop-slot').forEach((slot, index) => {
+    slot.dataset.chart = DEFAULT_LAYOUT[index] || '';
+  });
+}
+
 function loadState() {
-  const saved = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+  } catch {
+    localStorage.removeItem(CACHE_KEY);
+  }
   if (!saved) return;
   selectedMetric = saved.selectedMetric || selectedMetric;
   if (metricSelect) metricSelect.value = selectedMetric;
   document.querySelectorAll('.drop-slot').forEach((slot, index) => {
-    slot.dataset.chart = saved.layout?.[index] || slot.dataset.chart;
+    if (saved.layout && index in saved.layout) {
+      slot.dataset.chart = saved.layout[index];
+    }
   });
+}
+
+async function resetDashboard() {
+  localStorage.removeItem(CACHE_KEY);
+  applyDefaultState();
+  await refreshData();
 }
 
 function initDragDrop() {
   document.querySelectorAll('.kpi-source').forEach((button) => {
     button.addEventListener('dragstart', (event) => {
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
       event.dataTransfer?.setData('text/plain', button.dataset.chart || '');
     });
   });
 
-  document.querySelectorAll('.drop-slot').forEach((slot) => {
-    slot.addEventListener('dragover', (event) => event.preventDefault());
+  document.querySelectorAll('.drop-slot').forEach((slot, index) => {
+    slot.draggable = true;
+    slot.addEventListener('dragstart', (event) => {
+      const chart = slot.dataset.chart || '';
+      if (!chart || !renderers[chart]) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer?.setData('application/x-pyrowatch-slot', String(index));
+      event.dataTransfer?.setData('text/plain', chart);
+      slot.classList.add('dragging');
+    });
+    slot.addEventListener('dragend', () => {
+      slot.classList.remove('dragging');
+      clearDropTarget();
+    });
+    slot.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        const types = Array.from(event.dataTransfer.types);
+        event.dataTransfer.dropEffect = types.includes('application/x-pyrowatch-slot') ? 'move' : 'copy';
+      }
+      setDropTarget(slot);
+    });
     slot.addEventListener('drop', (event) => {
       event.preventDefault();
-      slot.dataset.chart = event.dataTransfer?.getData('text/plain') || '';
+      clearDropTarget();
+      const sourceIndex = event.dataTransfer?.getData('application/x-pyrowatch-slot');
+      const chart = event.dataTransfer?.getData('text/plain') || '';
+
+      if (sourceIndex) {
+        const slots = [...document.querySelectorAll('.drop-slot')];
+        const source = slots[Number(sourceIndex)];
+        if (source && source !== slot) {
+          const targetChart = slot.dataset.chart || '';
+          slot.dataset.chart = source.dataset.chart || '';
+          source.dataset.chart = targetChart;
+        }
+      } else {
+        if (!renderers[chart]) return;
+        slot.dataset.chart = chart;
+      }
+
       renderDashboard();
       saveState();
     });
@@ -490,7 +735,11 @@ metricSelect?.addEventListener('change', (event) => {
 });
 
 document.querySelector('#refresh')?.addEventListener('click', refreshData);
-window.addEventListener('resize', renderDashboard);
+document.querySelector('#reset')?.addEventListener('click', resetDashboard);
+window.addEventListener('resize', () => {
+  window.cancelAnimationFrame(resizeFrame);
+  resizeFrame = window.requestAnimationFrame(renderDashboard);
+});
 
 loadState();
 initMap();

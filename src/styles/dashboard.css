@@ -123,6 +123,29 @@ select {
 
 .kpi-panel {
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-list {
+  min-height: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: #43536a #151d2c;
+}
+
+.kpi-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.kpi-list::-webkit-scrollbar-track {
+  background: #151d2c;
+}
+
+.kpi-list::-webkit-scrollbar-thumb {
+  background: #43536a;
+  border-radius: 999px;
 }
 
 .kpi-source,
@@ -148,6 +171,7 @@ select {
 
 .actions {
   display: flex;
+  gap: 10px;
   justify-content: center;
   margin-top: auto;
 }
@@ -169,6 +193,11 @@ select {
 .icon-btn:hover {
   background: #2d3a52;
   color: #f8fafc;
+}
+
+.reset-btn:hover {
+  background: #3a1720;
+  color: #fecdd3;
 }
 
 .workspace {
@@ -316,6 +345,15 @@ h1 {
   padding: 14px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.card.dragging {
+  opacity: .45;
+}
+
+.card.drop-target {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
 }
 
 .card-header {

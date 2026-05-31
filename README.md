@@ -1,91 +1,159 @@
+<div align="center">
+
 # PyroWatch
 
 [![Astro](https://img.shields.io/badge/Astro-6.x-BC52EE?logo=astro&logoColor=white)](https://astro.build)
 [![D3.js](https://img.shields.io/badge/D3.js-7.x-F9A03C?logo=d3.js&logoColor=white)](https://d3js.org)
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.x-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
 
-[Preview](#preview) · [Workflow](#workflow) · [Data Sources](#data-sources) · [Project Structure](#project-structure) · [Installation](#installation) · [Development](#development)
+<p>
+  <a href="#project-goal">Project Goal</a>
+  ·
+  <a href="#dashboard-features">Features</a>
+  ·
+  <a href="#architecture">Architecture</a>
+  ·
+  <a href="#installation">Installation</a>
+  ·
+  <a href="#development">Development</a>
+  ·
+  <a href="#build">Build</a>
+</p>
+
+Portuguese version: [README.pt.md](README.pt.md)
+
+</div>
 
 ---
 
-Fire risk monitoring dashboard for Portugal. Displays rural fire statistics and burned area data from INE (Statistics Portugal) using an interactive map and D3.js charts.
+PyroWatch is a geographic dashboard about rural fires in Portugal. It combines an interactive Leaflet map with D3.js visualizations built from official INE/ICNF forestry statistics.
 
-Built with Astro + D3.js + Leaflet. Dark-themed single-page dashboard with drag-and-drop KPI layout and state persistence.
+The project was built for a data visualization / geographic information assignment. It is a static Astro app, so it can be deployed to GitHub Pages without a backend.
 
-## Preview
+## Project Goal
 
-Map markers show NUTS-3 regions with proportional circles (color-scaled by fire count or burned share). Click a marker to filter charts to that region. Six D3.js chart types: bar chart (top regions), donut (regional distribution), scatter (fires vs burned area), municipalities ranking, land use breakdown, and national summary cards.
+PyroWatch helps explore rural fire activity across Portuguese NUTS-3 regions. It focuses on:
 
-## Workflow
+- geographic distribution of rural fire occurrences;
+- proportion of burned area;
+- regional comparison between Norte, Centro, Lisboa, Alentejo, and Algarve;
+- top municipalities by number of fires;
+- interactive layout composition through drag-and-drop KPI cards.
 
-### Data Pipeline
+## Data Sources
 
-1. App loads on page init
-2. Fetches two JSON datasets from INE (Statistics Portugal) via `dados.gov.pt` API, with local JSON snapshots as fallback
-3. Data is parsed into regional NUTS-3 objects with fire counts and burned area percentages
-4. Update propagates to all components: map, summary panel, and all KPI charts
+The dashboard uses official public data:
 
-### Data Sources
+| Dataset | Indicator | Description | Latest snapshot |
+|---|---:|---|---:|
+| INE / ICNF | `0008386` | Rural fires, by geographic location, annual | 2023 |
+| INE / ICNF | `0013537` | Proportion of burned area, by geographic location and burned surface type, annual | 2024 |
 
-- **Incendios Rurais** (Rural Fires): Number of rural fires by NUTS-3 region (annual). Source: ICNF/DRRF RAA/IFCN RAM via INE indicator 0008386.
-- **Superficie Ardida** (Burned Area): Proportion of burned area (%) by NUTS-3 region and land type (annual). Source: ICNF via INE indicator 0013537.
-- Data is fetched live from INE API on each refresh. Falls back to local JSON snapshots in `public/data/` when the API is unreachable.
-- Local snapshots are updated manually by rebuilding the app with fresh data.
+Runtime behavior:
 
-### Map
+1. The app loads local JSON snapshots from `public/data/`.
+2. These snapshots are official INE responses saved with the project.
+3. Refresh redraws the dashboard from the same data source layer.
+4. The architecture keeps remote INE endpoints in the code, but local snapshots make the GitHub Pages deployment reliable even if the API is slow, blocked, or rate-limited.
 
-- Leaflet map centered on mainland Portugal (zoom disabled for scroll)
-- Dark-themed tiles via CSS filter
-- Circle markers for each NUTS-3 region, color scale (YlOrRd) by metric value
-- Click to select/deselect region; selected region highlights with outline
-- Hover tooltip shows value per region
-- Metric selector switches between fire count and burned share
+Local data files:
 
-### Charts
+- `public/data/incendios-rurais-ine.json`
+- `public/data/superficie-ardida-ine.json`
 
-Six D3.js chart types rendered in a 2-column grid:
+## Dashboard Features
 
-| Chart | Type | Description |
-|-------|------|-------------|
-| Top regioes | Horizontal bar | Top 8 NUTS-3 by fire count |
-| Distribuicao regional | Donut | Grouped by Norte/Centro/Lisboa/Alentejo/Algarve |
-| Ocorrencias vs ardida | Scatter | Fires vs burned share per region |
-| Top municipios | Horizontal bar | Top 8 municipalities by fire count |
-| Tipo de area ardida | Vertical bar | Burned area by land type (matos, povoamentos, etc.) |
-| Resumo nacional | Stat cards | Total fires, average burned share, top region, regions >=300 fires |
+- Dark mode dashboard UI.
+- Fixed full-height sidebar.
+- Scrollable KPI list inside the sidebar.
+- Scrollable main dashboard area.
+- Leaflet map centered on mainland Portugal.
+- Circle markers for NUTS-3 regions.
+- Metric selector for fire occurrences or burned area share.
+- Marker click filters dashboard by region.
+- D3 tooltips on charts.
+- Drag KPIs from sidebar into dashboard slots.
+- Reorder existing charts by dragging cards inside the grid.
+- Remove a chart with the `x` button.
+- Removed/empty slots persist after refresh and page reload.
+- Layout and selected metric are saved to `localStorage`.
 
-### Interactivity
+## D3 Visualizations
 
-- **Drag-and-drop**: Drag KPI buttons from sidebar into dashboard slots to place charts. Drop on an occupied slot replaces it.
-- **Remove chart**: Click the X on any chart card to clear its slot.
-- **Save/Restore**: Save button persists current layout and metric to localStorage. Layout restores on page load.
-- **Refresh**: Re-fetches live data from INE API and redraws all charts.
-- **Region filter**: Click a map marker to filter all charts to that NUTS-3 region. Charts update with filtered data.
+Available KPI chart types:
 
-### State Management
+| Chart | D3 technique | Purpose |
+|---|---|---|
+| Top regions | Horizontal bar chart | Compare NUTS-3 regions by rural fire count |
+| Regional distribution | Donut chart | Compare fire counts by major region group |
+| Occurrences vs burned area | Scatter plot | Relate fire count to burned surface share |
+| Top municipalities | Horizontal bar chart | Show municipalities with most rural fires |
+| Burned area type | Vertical bar chart | Compare burned surface types |
+| Annual evolution | Line chart | Show national annual fire-count trend when historical data is available |
+| Cumulative trend | Area chart | Show accumulated national fire count trend |
+| Regional weight | Treemap | Show proportional regional contribution |
+| Region/indicator matrix | Heatmap | Compare fire count and burned share by region group |
+| Burned area ranking | Lollipop chart | Rank regions by burned area share |
+| National summary | KPI cards | Show totals, averages, top region, and high-fire region count |
 
-- `selectedMetric`: `fires` or `burnedShare` — controls map and chart values
-- `selectedRegion`: active NUTS-3 filter (null = all of Portugal)
-- Layout (which chart type is in each grid slot) and selected metric saved to `localStorage` under `pyrowatch-state`
+## Interaction Model
 
-## Project Structure
+The page has two work areas:
 
-```
+- left sidebar: data metric selector, KPI chart list, data source info, refresh action;
+- right workspace: map, selected-region summary, and chart grid.
+
+Drag-and-drop behavior:
+
+- dragging from sidebar into a slot creates/replaces a chart;
+- dragging a chart card onto another slot swaps both charts;
+- deleting a chart sets that slot to empty;
+- empty slots stay empty after refresh because empty state is saved explicitly.
+
+## Architecture
+
+```text
 src/
-  pages/index.astro       Main page layout
-  layouts/Layout.astro    HTML shell
+  pages/
+    index.astro            Astro page composition
+  layouts/
+    Layout.astro           HTML shell
   components/
-    Sidebar.astro          Brand, metric selector, KPI drag sources, source info, actions
-    MapPanel.astro         Leaflet map container + summary panel
-    ChartGrid.astro        2-column drop-slot grid for D3 charts
-  scripts/dashboard.js    All D3/Leaflet logic, data fetching, state, drag-drop
-  styles/dashboard.css    Dark theme across all components
+    Sidebar.astro          Controls, KPI sources, source info
+    MapPanel.astro         Map container and selected-region summary
+    ChartGrid.astro        Dashboard drop slots
+  scripts/
+    dashboard.js           D3, Leaflet, data parsing, state, interactions
+  styles/
+    dashboard.css          Dark UI, layout, responsive behavior
 public/
   data/
-    incendios-rurais-ine.json       Local snapshot of fire data
-    superficie-ardida-ine.json      Local snapshot of burned area data
-  favicon.ico
+    incendios-rurais-ine.json
+    superficie-ardida-ine.json
 ```
+
+## Technical Choices
+
+- **Astro**: static build, simple GitHub Pages deployment, low runtime overhead.
+- **D3.js**: custom SVG charts, scales, axes, transitions, treemap, heatmap, donut, and interaction tooltips.
+- **Leaflet**: lightweight geographic map, markers, zoom controls, and region selection.
+- **LocalStorage**: persistence for dashboard layout and metric selection.
+- **CSS Grid/Flexbox**: fixed sidebar plus scrollable dashboard workspace.
+
+## Limitations
+
+- NUTS-3 marker positions are approximate centroids, not administrative polygons.
+- The dashboard uses official snapshots for reliability; refreshing does not guarantee newer data unless snapshots are updated.
+- Some INE indicators expose only the latest period in the current JSON response, so trend charts depend on historical availability from the data endpoint.
+- The map is a proportional marker map, not a full choropleth boundary map.
+
+## Possible Future Work
+
+- Add NUTS-3 GeoJSON polygons for a true choropleth.
+- Add year selector if historical periods are made available in the snapshot.
+- Add data-update script to refresh local snapshots automatically.
+- Add export to PNG/PDF for report submission.
+- Add comparison mode between two regions.
 
 ## Installation
 
@@ -99,7 +167,11 @@ npm install
 npm run dev
 ```
 
-Opens at `localhost:4321`.
+Local route:
+
+```text
+http://127.0.0.1:4321/pyrowatch
+```
 
 ## Build
 
@@ -108,10 +180,18 @@ npm run build
 npm run preview
 ```
 
-## Notes
+## GitHub Pages
 
-- First load fetches INE API data; fallback to local JSON if API is unavailable.
-- Map uses OpenStreetMap tiles with dark CSS inversion filter.
-- All chart data reflects the currently selected metric (fires or burned share) and optional region filter.
-- NUTS-3 region positions are approximate centroids for marker placement.
-- Data refresh hits live INE endpoints; response time depends on API availability.
+The Astro base path is configured in `astro.config.mjs`:
+
+```js
+export default defineConfig({
+  base: '/pyrowatch/'
+});
+```
+
+This matches a repository deployment at:
+
+```text
+https://<username>.github.io/pyrowatch/
+```
